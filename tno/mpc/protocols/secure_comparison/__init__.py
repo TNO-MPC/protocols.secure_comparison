@@ -11,4 +11,4 @@ from .keyholder import KeyHolder as KeyHolder
 from .utils import from_bits as from_bits
 from .utils import to_bits as to_bits
 
-__version__ = "4.1.1"
+__version__ = "4.1.2"

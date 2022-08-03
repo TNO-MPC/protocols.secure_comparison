@@ -9,7 +9,7 @@ The package tno.mpc.secure_comparison is part of the TNO Python Toolbox.
 
 ## Documentation
 
-Documentation of the tno.mpc.secure_comparison package can be found [here](https://docs.mpc.tno.nl/protocols/secure_comparison/4.1.1).
+Documentation of the tno.mpc.secure_comparison package can be found [here](https://docs.mpc.tno.nl/protocols/secure_comparison/4.1.2).
 
 ## Install
 
