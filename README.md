@@ -1,30 +1,60 @@
-# TNO MPC Lab - Protocols - Secure Comparison
+# TNO PET Lab - secure Multi-Party Computation (MPC) - Protocols - Secure Comparison
 
-The TNO MPC lab consists of generic software components, procedures, and functionalities developed and maintained on a regular basis to facilitate and aid in the development of MPC solutions. The lab is a cross-project initiative allowing us to integrate and reuse previously developed MPC functionalities to boost the development of new protocols and solutions.
+Implementation of a secure comparison protocol based on the DGK encryption
+scheme. The implementation follows the description of the paper
+[Improving the DGK comparison
+protocol](https://doi.org/10.1109/WIFS.2012.6412624), a paper by Thijs Veugen
+improving upon the secure comparison protocol by [Damgård, Geisler, and
+Krøigaard](https://doi.org/10.1007/978-3-540-73458-1_30).
 
-The package tno.mpc.protocols.secure_comparison is part of the TNO Python Toolbox.
+Note that a correction was published in [Correction to "Improving the DGK
+comparison protocol"](https://doi.org/10.1109/WIFS.2012.6412624), which is
+incorporated in the implementation.
 
-*Remark: This cryptography software may not be used in applications that violate international export control legislations.*  
-*This implementation of cryptographic software has not been audited. Use at your own risk.*
+### PET Lab
+
+The TNO PET Lab consists of generic software components, procedures, and functionalities developed and maintained on a regular basis to facilitate and aid in the development of PET solutions. The lab is a cross-project initiative allowing us to integrate and reuse previously developed PET functionalities to boost the development of new protocols and solutions.
+
+The package `tno.mpc.protocols.secure_comparison` is part of the [TNO Python Toolbox](https://github.com/TNO-PET).
+
+_Limitations in (end-)use: the content of this software package may solely be used for applications that comply with international export control laws._  
+_This implementation of cryptographic software has not been audited. Use at your own risk._
 
 ## Documentation
 
-Documentation of the tno.mpc.protocols.secure_comparison package can be found [here](https://docs.mpc.tno.nl/protocols/secure_comparison/4.1.2).
+Documentation of the `tno.mpc.protocols.secure_comparison` package can be found
+[here](https://docs.pet.tno.nl/mpc/protocols/secure_comparison/4.3.2).
 
 ## Install
 
-Easily install the tno.mpc.protocols.secure_comparison package using pip:
+Easily install the `tno.mpc.protocols.secure_comparison` package using `pip`:
+
 ```console
 $ python -m pip install tno.mpc.protocols.secure_comparison
 ```
 
-## Note:
-A significant performance improvement for some algorithms can be achieved by installing the GMPY2 library.
+_Note:_ If you are cloning the repository and wish to edit the source code, be
+sure to install the package in editable mode:
+
 ```console
-$ python -m pip install tno.mpc.protocols.secure_comparison[gmpy]
+$ python -m pip install -e 'tno.mpc.protocols.secure_comparison'
+```
+
+If you wish to run the tests you can use:
+
+```console
+$ python -m pip install 'tno.mpc.protocols.secure_comparison[tests]'
+```
+_Note:_ A significant performance improvement can be achieved by installing the GMPY2 library.
+
+```console
+$ python -m pip install 'tno.mpc.protocols.secure_comparison[gmpy]'
 ```
 
 ## Usage
+
+Usage example:
+
 ```python
 import asyncio
 
@@ -36,7 +66,7 @@ from tno.mpc.encryption_schemes.utils import next_prime
 from tno.mpc.protocols.secure_comparison import Initiator, KeyHolder
 
 
-async def run_protocol():
+async def run_protocol() -> None:
     taskA = asyncio.create_task(alice.perform_secure_comparison(x_enc, y_enc))
     taskB = asyncio.create_task(bob.perform_secure_comparison())
 
@@ -50,7 +80,7 @@ if __name__ == "__main__":
     l = 16
     # Setup the Paillier scheme
     scheme_paillier = Paillier.from_security_parameter(key_length=2048)
-    # Setup the DGK scheme
+    # Setup the DGK scheme. This may take up to a minute.
     u = next_prime((1 << (l + 2)))
     scheme_dgk = DGK.from_security_parameter(
         v_bits=160, n_bits=2048, u=u, full_decryption=False
@@ -67,8 +97,8 @@ if __name__ == "__main__":
     # Encrypt two numbers (x,y) for the protocol and set the maximum bit_length (l)
     x = 23
     y = 42
-    x_enc = scheme_paillier.encrypt(x)
-    y_enc = scheme_paillier.encrypt(y)
+    x_enc = scheme_paillier.unsafe_encrypt(x)
+    y_enc = scheme_paillier.unsafe_encrypt(y)
 
     alice = Initiator(l, communicator=pool_alice, other_party="keyholder")
     bob = KeyHolder(
@@ -108,6 +138,12 @@ if __name__ == "__main__":
     )
     x_leq_y = scheme_paillier.decrypt(x_leq_y_enc)
     assert x_leq_y == 1
+
+    # Shut down encryption schemes (optional but recommended)
+    alice.scheme_paillier.shut_down()
+    alice.scheme_dgk.shut_down()
+    bob.scheme_paillier.shut_down()
+    bob.scheme_dgk.shut_down()
 ```
 
 The communicator object is required only when the protocol is ran through `perform_secure_comparison`. In that case, one may choose to pass any communicator object that adheres to the `tno.mpc.protocols.secure_comparison.Communicator` protocol. An example can be found in the unit tests.

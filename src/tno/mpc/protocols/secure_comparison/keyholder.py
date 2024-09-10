@@ -1,13 +1,15 @@
 """Party that holds the secret keys. Bob; B in the paper."""
 
-from typing import List, Optional, Tuple, cast
+from __future__ import annotations
+
+from typing import cast
 
 from tno.mpc.encryption_schemes.dgk import DGK, DGKCiphertext
 from tno.mpc.encryption_schemes.paillier import Paillier, PaillierCiphertext
 from tno.mpc.encryption_schemes.utils import next_prime
 
-from .communicator import Communicator
-from .utils import to_bits
+from tno.mpc.protocols.secure_comparison.communicator import Communicator
+from tno.mpc.protocols.secure_comparison.utils import to_bits
 
 
 class KeyHolder:
@@ -18,10 +20,10 @@ class KeyHolder:
     def __init__(
         self,
         l_maximum_bit_length: int,
-        communicator: Optional[Communicator] = None,
+        communicator: Communicator | None = None,
         other_party: str = "",
-        scheme_paillier: Optional[Paillier] = None,
-        scheme_dgk: Optional[DGK] = None,
+        scheme_paillier: Paillier | None = None,
+        scheme_dgk: DGK | None = None,
         session_id: int = 0,
     ) -> None:
         r"""
@@ -37,9 +39,33 @@ class KeyHolder:
         self.l_maximum_bit_length = l_maximum_bit_length
         self.communicator = communicator
         self.other_party = other_party
-        self.scheme_paillier = scheme_paillier
-        self.scheme_dgk = scheme_dgk
+        self._scheme_paillier = scheme_paillier
+        self._scheme_dgk = scheme_dgk
         self.session_id = session_id
+
+    @property
+    def scheme_paillier(self) -> Paillier:
+        """
+        Paillier scheme of the keyholder.
+
+        :raise ValueError: No scheme available.
+        :return: Paillier scheme.
+        """
+        if self._scheme_paillier is None:
+            raise ValueError("No Paillier scheme has been initialized or received.")
+        return self._scheme_paillier
+
+    @property
+    def scheme_dgk(self) -> DGK:
+        """
+        DGK scheme of the keyholder.
+
+        :raise ValueError: No scheme available.
+        :return: DGK scheme.
+        """
+        if self._scheme_dgk is None:
+            raise ValueError("No DGK scheme has been initialized or received.")
+        return self._scheme_dgk
 
     async def perform_secure_comparison(self) -> None:
         """
@@ -56,9 +82,8 @@ class KeyHolder:
 
         # make sure you have the schemes and share the public keys
         await self.make_and_send_encryption_schemes(session_id)
+        self._start_randomness_generation()
 
-        self.scheme_paillier = cast(Paillier, self.scheme_paillier)
-        self.scheme_dgk = cast(DGK, self.scheme_dgk)
         z_enc = await self.communicator.recv(
             self.other_party, msg_id=f"step_1_session_{session_id}"
         )
@@ -127,36 +152,36 @@ class KeyHolder:
         if self.communicator is None:
             raise ValueError("Communicator not properly initialized.")
 
-        if not self.scheme_paillier:
-            self.scheme_paillier = Paillier.from_security_parameter(
+        if self._scheme_paillier is None:
+            self._scheme_paillier = Paillier.from_security_parameter(
                 key_length=key_length_paillier
             )
 
-        if not self.scheme_dgk:
-            self.scheme_dgk = DGK.from_security_parameter(
+        if self._scheme_dgk is None:
+            self._scheme_dgk = DGK.from_security_parameter(
                 v_bits=v_bits_dgk,
                 n_bits=n_bits_dgk,
-                u=next_prime((1 << (self.l_maximum_bit_length + 2))),
+                u=next_prime(1 << (self.l_maximum_bit_length + 2)),
                 full_decryption=False,
             )
 
-        scheme_paillier_initiator = Paillier(
-            public_key=self.scheme_paillier.public_key, secret_key=None
-        )
-        scheme_dgk_initiator = DGK(
-            public_key=self.scheme_dgk.public_key, secret_key=None
-        )
-
         await self.communicator.send(
             self.other_party,
-            (scheme_paillier_initiator, scheme_dgk_initiator),
+            (self.scheme_paillier, self.scheme_dgk),
             msg_id=f"schemes_session_{session_id}",
         )
+
+    def _start_randomness_generation(self) -> None:
+        """
+        Boot randomness generation in both encryption schemes.
+        """
+        self.scheme_paillier.boot_randomness_generation(3)
+        self.scheme_dgk.boot_randomness_generation(self.l_maximum_bit_length + 1)
 
     @staticmethod
     def step_2(
         z_enc: PaillierCiphertext, l: int, scheme_paillier: Paillier
-    ) -> Tuple[int, int]:
+    ) -> tuple[int, int]:
         r"""
         $B$ decrypts $[[z]]$, and computes $\beta = z \mod 2^l$.
 
@@ -181,6 +206,7 @@ class KeyHolder:
         :param z: Plaintext value of $z$.
         :param scheme_dgk: DGK encryption scheme.
         :param scheme_paillier: Paillier encryption scheme.
+        :param l: maximum bit length used to constrain variables.
         :return: Encrypted value of the bit $d = (z < (N - 1)/2)$: $[d]$.
         """
         assert scheme_dgk.public_key.u > (1 << (l + 2))
@@ -190,7 +216,7 @@ class KeyHolder:
         )
 
     @staticmethod
-    def step_4b(beta: int, l: int, scheme_dgk: DGK) -> List[DGKCiphertext]:
+    def step_4b(beta: int, l: int, scheme_dgk: DGK) -> list[DGKCiphertext]:
         r"""
         $B$ computes the encrypted bits $[\beta_i], 0 \leq i < l$ to $A$.
 
@@ -207,7 +233,7 @@ class KeyHolder:
         ]
 
     @staticmethod
-    def step_4j(c_is_enc: List[DGKCiphertext], scheme_dgk: DGK) -> int:
+    def step_4j(c_is_enc: list[DGKCiphertext], scheme_dgk: DGK) -> int:
         r"""
         $B$ checks whether one of the numbers $c_i$ is decrypted to zero. If he finds one,
         $\delta_B \leftarrow 1$, else $\delta_B \leftarrow 0$.
@@ -229,7 +255,7 @@ class KeyHolder:
     @staticmethod
     def step_5(
         z: int, l: int, delta_b: int, scheme_paillier: Paillier
-    ) -> Tuple[PaillierCiphertext, PaillierCiphertext, PaillierCiphertext]:
+    ) -> tuple[PaillierCiphertext, PaillierCiphertext, PaillierCiphertext]:
         r"""
         $B$ computes $\zeta_1 = z \div 2^l$ and encrypts it to $[[\zeta_1]]$ and computes
         $\zeta_2 = (z + N) \div 2^l$ and encrypts it to $[[\zeta_2]]$. $B$ also encrypts

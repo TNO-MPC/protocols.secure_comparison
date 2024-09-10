@@ -1,13 +1,15 @@
 """Initiator of protocol, i.e. performs step 1. Alice; A in the paper."""
 
+from __future__ import annotations
+
 from secrets import choice, randbelow
-from typing import Any, List, Optional, Tuple, Union, cast
+from typing import Any, cast
 
 from tno.mpc.encryption_schemes.dgk import DGK, DGKCiphertext
 from tno.mpc.encryption_schemes.paillier import Paillier, PaillierCiphertext
 
-from .communicator import Communicator
-from .utils import to_bits
+from tno.mpc.protocols.secure_comparison.communicator import Communicator
+from tno.mpc.protocols.secure_comparison.utils import to_bits
 
 
 class Initiator:
@@ -18,10 +20,10 @@ class Initiator:
     def __init__(
         self,
         l_maximum_bit_length: int,
-        communicator: Optional[Communicator] = None,
+        communicator: Communicator | None = None,
         other_party: str = "",
-        scheme_paillier: Optional[Paillier] = None,
-        scheme_dgk: Optional[DGK] = None,
+        scheme_paillier: Paillier | None = None,
+        scheme_dgk: DGK | None = None,
         session_id: int = 0,
     ) -> None:
         r"""
@@ -36,23 +38,47 @@ class Initiator:
         self.l_maximum_bit_length = l_maximum_bit_length
         self.communicator = communicator
         self.other_party = other_party
-        self.scheme_paillier = scheme_paillier
-        self.scheme_dgk = scheme_dgk
+        self._scheme_paillier = scheme_paillier
+        self._scheme_dgk = scheme_dgk
         self.session_id = session_id
+
+    @property
+    def scheme_paillier(self) -> Paillier:
+        """
+        Paillier scheme of the initiator.
+
+        :raise ValueError: No scheme available.
+        :return: Paillier scheme.
+        """
+        if self._scheme_paillier is None:
+            raise ValueError("No Paillier scheme has been initialized or received.")
+        return self._scheme_paillier
+
+    @property
+    def scheme_dgk(self) -> DGK:
+        """
+        DGK scheme of the initiator.
+
+        :raise ValueError: No scheme available.
+        :return: DGK scheme.
+        """
+        if self._scheme_dgk is None:
+            raise ValueError("No DGK scheme has been initialized or received.")
+        return self._scheme_dgk
 
     async def perform_secure_comparison(
         self,
-        x_enc: PaillierCiphertext,
-        y_enc: PaillierCiphertext,
+        x: PaillierCiphertext | float,
+        y: PaillierCiphertext | float,
     ) -> PaillierCiphertext:
-        """
+        r"""
         Performs all steps of the secure comparison protocol for Alice.
         Performs required communication with Bob.
 
-        :param x_enc: first encrypted input variable $[[x]]$.
-        :param y_enc: second encrypted input variable $[[y]]$.
+        :param x: first (encrypted) input variable $x$ or $[[x]]$.
+        :param y: second (encrypted) input variable $y$ or $[[y]]$.
         :return: Encrypted value of $(x<=y)$: $[[(x<=y)]]$.
-        :raise ValueError: raised when communicator is not propertly configured.
+        :raise ValueError: raised when communicator is not properly configured.
         """
         if self.communicator is None:
             raise ValueError("Communicator not properly initialized.")
@@ -62,9 +88,18 @@ class Initiator:
 
         # make sure you have the schemes. Always receive them to make sure they are the same.
         await self.receive_encryption_schemes(session_id)
+        self._start_randomness_generation()
 
-        self.scheme_paillier = cast(Paillier, self.scheme_paillier)
-        self.scheme_dgk = cast(DGK, self.scheme_dgk)
+        x_enc = (
+            x
+            if isinstance(x, PaillierCiphertext)
+            else self.scheme_paillier.unsafe_encrypt(x)
+        )
+        y_enc = (
+            y
+            if isinstance(y, PaillierCiphertext)
+            else self.scheme_paillier.unsafe_encrypt(y)
+        )
 
         # step 1
         z_enc, r_plain = Initiator.step_1(
@@ -145,20 +180,41 @@ class Initiator:
 
         :param session_id: distinguish communication different sessions.
         :raise ValueError: raised when communicator is not properly configured.
+        :raise ValueError: raised when received scheme is different from readily
+            initialized scheme.
         """
         if self.communicator is None:
             raise ValueError("Communicator not properly initialized.")
 
-        self.scheme_paillier, self.scheme_dgk = await self.communicator.recv(
+        received_scheme_paillier, received_scheme_dgk = await self.communicator.recv(
             self.other_party, msg_id=f"schemes_session_{session_id}"
         )
+        if self._scheme_paillier is None:
+            self._scheme_paillier = received_scheme_paillier
+        elif self.scheme_paillier != received_scheme_paillier:
+            raise ValueError(
+                "Readily available Paillier scheme and received Paillier scheme are different."
+            )
+        if self._scheme_dgk is None:
+            self._scheme_dgk = received_scheme_dgk
+        elif self.scheme_dgk != received_scheme_dgk:
+            raise ValueError(
+                "Readily available DGK scheme and received DGK scheme are different."
+            )
+
+    def _start_randomness_generation(self) -> None:
+        """
+        Boot randomness generation in both encryption schemes.
+        """
+        self.scheme_paillier.boot_randomness_generation(1)
+        self.scheme_dgk.boot_randomness_generation(self.l_maximum_bit_length + 1)
 
     @staticmethod
-    def shuffle(values: List[Any]) -> List[Any]:
+    def shuffle(values: list[Any]) -> list[Any]:
         r"""
         Shuffle the list in random order.
 
-        :param values: List of objets that is to be shuffled.
+        :param values: List of objects that is to be shuffled.
         :return: Shuffled version of the input list.
         """
         values = values.copy()
@@ -175,7 +231,7 @@ class Initiator:
         y_enc: PaillierCiphertext,
         l: int,
         scheme_paillier: Paillier,
-    ) -> Tuple[PaillierCiphertext, int]:
+    ) -> tuple[PaillierCiphertext, int]:
         r"""
         $A$ chooses a random number $r, 0 \leq r < N$, and computes
         $$[[z]] \leftarrow [[y - x + 2^l + r]] = [[x]] \cdot [[y]]^{-1} \cdot [[2^l + r]]
@@ -193,6 +249,7 @@ class Initiator:
         assert (1 << (l + 2)) < scheme_paillier.public_key.n // 2
         r = randbelow(scheme_paillier.public_key.n)
         # Note: the paper has a typo here, it says x - y, i/o y - x.
+
         return (
             y_enc
             - x_enc
@@ -201,7 +258,7 @@ class Initiator:
         )
 
     @staticmethod
-    def step_3(r: int, l: int) -> List[int]:
+    def step_3(r: int, l: int) -> list[int]:
         r"""
         $A$ computes $\alpha = r \mod 2^l$.
 
@@ -228,15 +285,15 @@ class Initiator:
         """
         assert (
             0 <= r < scheme_paillier.public_key.n
-        )  # If step 1 is used, this is no issue. But this function can also be called seperately.
+        )  # If step 1 is used, this is no issue. But this function can also be called separately.
         if r < (scheme_paillier.public_key.n - 1) // 2:
             d_enc = scheme_dgk.unsafe_encrypt(0, apply_encoding=False)
         return d_enc
 
     @staticmethod
     def step_4d(
-        alpha: List[int], beta_is_enc: List[DGKCiphertext]
-    ) -> List[DGKCiphertext]:
+        alpha: list[int], beta_is_enc: list[DGKCiphertext]
+    ) -> list[DGKCiphertext]:
         r"""
         For each $i, 0 \leq i < l$, $A$ computes $[\alpha_i \oplus \beta_i]$ as follows:
         if $\alpha_i = 0$ then $[\alpha_i \oplus \beta_i] \leftarrow [\beta_i]$ else
@@ -273,11 +330,11 @@ class Initiator:
     @staticmethod
     def step_4e(
         r: int,
-        alpha: List[int],
-        alpha_is_xor_beta_is_enc: List[DGKCiphertext],
+        alpha: list[int],
+        alpha_is_xor_beta_is_enc: list[DGKCiphertext],
         d_enc: DGKCiphertext,
         scheme_paillier: Paillier,
-    ) -> Tuple[List[DGKCiphertext], List[int]]:
+    ) -> tuple[list[DGKCiphertext], list[int]]:
         r"""
         A computes $\tilde{\alpha} = (r - N) \mod 2^l$, the corrected value of $\alpha$ in case a
         carry-over actually did occur and adjusts $[\alpha_i \oplus \beta_i]$ for each $i$:
@@ -327,7 +384,7 @@ class Initiator:
         )
 
     @staticmethod
-    def step_4f(w_is_enc: List[DGKCiphertext]) -> List[DGKCiphertext]:
+    def step_4f(w_is_enc: list[DGKCiphertext]) -> list[DGKCiphertext]:
         r"""
         For each $i, 0 \leq i < l$, $A$ computes $[w_i] \leftarrow [w_i]^{2^i} \mod n$
         such that these values will not interfere each other when added.
@@ -353,7 +410,7 @@ class Initiator:
         return list(map(compute_w, w_is_enc))
 
     @staticmethod
-    def step_4g() -> Tuple[int, int]:
+    def step_4g() -> tuple[int, int]:
         r"""
         $A$ chooses a uniformly random bit $\delta_A$ and computes $s = 1 - 2 \cdot \delta_A$.
 
@@ -366,14 +423,14 @@ class Initiator:
     @staticmethod
     def step_4h(
         s: int,
-        alpha: List[int],
-        alpha_tilde: List[int],
+        alpha: list[int],
+        alpha_tilde: list[int],
         d_enc: DGKCiphertext,
-        beta_is_enc: List[DGKCiphertext],
-        w_is_enc: List[DGKCiphertext],
+        beta_is_enc: list[DGKCiphertext],
+        w_is_enc: list[DGKCiphertext],
         delta_a: int,
         scheme_dgk: DGK,
-    ) -> List[DGKCiphertext]:
+    ) -> list[DGKCiphertext]:
         r"""
         For each $i, 0 \leq i < l$, $A$ computes $[c_i] = [s] \cdot [\alpha_i] \cdot
         [d]^{\tilde{\alpha}_i-\alpha_i} \cdot [\beta_i]^{-1} \cdot
@@ -402,7 +459,7 @@ class Initiator:
         c_is_enc = [
             scheme_dgk.unsafe_encrypt(s, apply_encoding=False) for _ in range(l)
         ]
-        w_is_enc_sum: Union[int, DGKCiphertext] = 0
+        w_is_enc_sum: int | DGKCiphertext = 0
 
         # pre-compute 3 options for d_enc * (alpha_i, alpha_tilde_i) to improve efficiency
         d_enc_mult_table = {
@@ -429,8 +486,8 @@ class Initiator:
 
     @staticmethod
     def step_4i(
-        c_is_enc: List[DGKCiphertext], scheme_dgk: DGK, do_shuffle: bool = True
-    ) -> List[DGKCiphertext]:
+        c_is_enc: list[DGKCiphertext], scheme_dgk: DGK, do_shuffle: bool = True
+    ) -> list[DGKCiphertext]:
         r"""
         $A$ blinds the numbers $c_i$ by raising them to a random non-zero exponent
         $r_i \in \{1,\ldots,u-1\}$.

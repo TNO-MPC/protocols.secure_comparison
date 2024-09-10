@@ -1,12 +1,12 @@
 """ Functions that don't belong to one of the players"""
 
-from typing import List
+from __future__ import annotations
 
 
-def to_bits(integer: int, bit_length: int) -> List[int]:
+def to_bits(integer: int, bit_length: int) -> list[int]:
     """
-    Convert a given integer to a list of bits, with the least significant bit first, and the most
-    significant bit last.
+    Convert a given non-negative integer to a list of bits, with the least significant bit
+    first, and the most significant bit last.
 
     :param integer: Integer to be converted to bits.
     :param bit_length: Amount of bits to which the integer should be converted.
@@ -21,9 +21,10 @@ def to_bits(integer: int, bit_length: int) -> List[int]:
     return bits
 
 
-def from_bits(bits: List[int]) -> int:
+def from_bits(bits: list[int]) -> int:
     """
-    Convert a set of bits, least significant bit first to an integer.
+    Convert a set of bits, least significant bit first to a
+    non-negative integer.
 
     :param bits: List of bits, least significant bit first.
     :return: Integer representation of the bits.

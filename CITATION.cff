@@ -2,22 +2,21 @@ cff-version: 1.2.0
 license: Apache-2.0
 message: If you use this software, please cite it using these metadata.
 authors:
-      - name: TNO MPC Lab
-        city: The Hague
-        country: NL
-        email: mpclab@tno.nl
-        website: https://mpc.tno.nl
+  - name: TNO PET Lab
+    city: The Hague
+    country: NL
+    email: petlab@tno.nl
+    website: https://pet.tno.nl
 type: software
-url: https://mpc.tno.nl
+url: https://pet.tno.nl
 contact:
-      - name: TNO MPC Lab
-        city: The Hague
-        country: NL
-        email: mpclab@tno.nl
-        website: https://mpc.tno.nl
+  - name: TNO PET Lab
+    city: The Hague
+    country: NL
+    email: petlab@tno.nl
+    website: https://pet.tno.nl
 repository-code: https://github.com/TNO-MPC/protocols.secure_comparison
 repository-artifact: https://pypi.org/project/tno.mpc.protocols.secure_comparison
-title: TNO MPC Lab - Protocols - Secure Comparison
-version: v4.1.2
-date-released: 2022-08-03
-
+title: TNO PET Lab - secure Multi-Party Computation (MPC) - Protocols - Secure Comparison
+version: 4.3.2
+date-released: 2024-11-29
