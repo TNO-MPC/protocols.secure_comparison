@@ -18,5 +18,5 @@ contact:
 repository-code: https://github.com/TNO-MPC/protocols.secure_comparison
 repository-artifact: https://pypi.org/project/tno.mpc.protocols.secure_comparison
 title: TNO PET Lab - secure Multi-Party Computation (MPC) - Protocols - Secure Comparison
-version: 4.3.2
-date-released: 2024-11-29
+version: 4.4.0
+date-released: 2024-12-10

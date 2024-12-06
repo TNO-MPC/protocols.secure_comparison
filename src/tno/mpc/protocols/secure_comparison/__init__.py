@@ -14,4 +14,4 @@ from tno.mpc.protocols.secure_comparison.keyholder import KeyHolder as KeyHolder
 from tno.mpc.protocols.secure_comparison.utils import from_bits as from_bits
 from tno.mpc.protocols.secure_comparison.utils import to_bits as to_bits
 
-__version__ = "4.3.2"
+__version__ = "4.4.0"

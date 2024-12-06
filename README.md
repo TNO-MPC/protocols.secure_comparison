@@ -23,7 +23,7 @@ _This implementation of cryptographic software has not been audited. Use at your
 ## Documentation
 
 Documentation of the `tno.mpc.protocols.secure_comparison` package can be found
-[here](https://docs.pet.tno.nl/mpc/protocols/secure_comparison/4.3.2).
+[here](https://docs.pet.tno.nl/mpc/protocols/secure_comparison/4.4.0).
 
 ## Install
 
@@ -45,6 +45,7 @@ If you wish to run the tests you can use:
 ```console
 $ python -m pip install 'tno.mpc.protocols.secure_comparison[tests]'
 ```
+
 _Note:_ A significant performance improvement can be achieved by installing the GMPY2 library.
 
 ```console
